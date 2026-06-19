@@ -5,6 +5,7 @@ import {
   computeTaxSummary,
   computePortfolioMetrics,
   enrichHoldingsWithPrices,
+  buildValueSeries,
 } from './portfolio'
 import type { Transaction } from '@/types'
 
@@ -210,6 +211,46 @@ describe('computePortfolioMetrics', () => {
     expect(metrics.totalValue).toBe(0)
     expect(metrics.totalInvested).toBe(0)
     expect(metrics.totalUnrealizedPnLPercent).toBe(0)
+  })
+})
+
+describe('buildValueSeries', () => {
+  it('returns empty array for no transactions', () => {
+    expect(buildValueSeries([])).toHaveLength(0)
+  })
+
+  it('accumulates invested capital across buys', () => {
+    const txs = [
+      makeTx({ id: '1', quantity: 10, price: 100, fees: 0, date: '2024-01-01' }),
+      makeTx({ id: '2', quantity: 5, price: 200, fees: 0, date: '2024-02-01' }),
+    ]
+    const series = buildValueSeries(txs)
+    expect(series[0]).toEqual({ date: '2024-01-01', value: 1000 })
+    expect(series[1]).toEqual({ date: '2024-02-01', value: 2000 })
+  })
+
+  it('reduces invested capital on sell', () => {
+    const txs = [
+      makeTx({ id: '1', quantity: 10, price: 100, fees: 0, date: '2024-01-01' }),
+      makeTx({ id: '2', type: 'sell', quantity: 5, price: 100, fees: 0, date: '2024-02-01' }),
+    ]
+    const series = buildValueSeries(txs)
+    expect(series[1].value).toBe(500)
+  })
+
+  it('appends current value as final point', () => {
+    const txs = [makeTx({ id: '1', quantity: 10, price: 100, fees: 0, date: '2024-01-01' })]
+    const series = buildValueSeries(txs, 1500)
+    expect(series[series.length - 1].value).toBe(1500)
+  })
+
+  it('ignores dividends in capital series', () => {
+    const txs = [
+      makeTx({ id: '1', quantity: 10, price: 100, fees: 0, date: '2024-01-01' }),
+      makeTx({ id: '2', type: 'dividend', quantity: 10, price: 2, date: '2024-03-01' }),
+    ]
+    const series = buildValueSeries(txs)
+    expect(series).toHaveLength(1)
   })
 })
 

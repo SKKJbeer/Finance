@@ -149,6 +149,37 @@ export function computeTaxSummary(
   }
 }
 
+export function buildValueSeries(
+  transactions: Transaction[],
+  currentValue?: number
+): Array<{ date: string; value: number }> {
+  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
+  const series: Array<{ date: string; value: number }> = []
+  let invested = 0
+
+  for (const tx of sorted) {
+    if (tx.type === 'buy' || tx.type === 'transfer_in') {
+      invested += tx.quantity * tx.price + tx.fees
+    } else if (tx.type === 'sell' || tx.type === 'transfer_out') {
+      invested -= tx.quantity * tx.price - tx.fees
+    } else {
+      continue
+    }
+    series.push({ date: tx.date, value: Math.max(0, Math.round(invested * 100) / 100) })
+  }
+
+  if (series.length > 0 && currentValue !== undefined && currentValue > 0) {
+    const today = new Date().toISOString().split('T')[0]
+    if (series[series.length - 1].date !== today) {
+      series.push({ date: today, value: Math.round(currentValue * 100) / 100 })
+    } else {
+      series[series.length - 1] = { date: today, value: Math.round(currentValue * 100) / 100 }
+    }
+  }
+
+  return series
+}
+
 export function computePortfolioMetrics(holdings: Holding[]) {
   const totalValue = holdings.reduce((sum, h) => sum + (h.currentValue ?? h.totalInvested), 0)
   const totalInvested = holdings.reduce((sum, h) => sum + h.totalInvested, 0)

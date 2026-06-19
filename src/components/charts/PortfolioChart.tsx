@@ -60,7 +60,7 @@ function CustomTooltip({ active, payload, label, currency }: CustomTooltipProps)
 }
 
 export function PortfolioChart({ data, currency = 'EUR' }: PortfolioChartProps) {
-  const [range, setRange] = useState<Range>('1M')
+  const [range, setRange] = useState<Range>('ALL')
   const filtered = filterByRange(data, range)
 
   const isPositive = filtered.length >= 2
