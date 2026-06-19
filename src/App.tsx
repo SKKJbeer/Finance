@@ -6,7 +6,7 @@ import { TransactionsPage } from '@/features/transactions/TransactionsPage'
 import { HouseholdPage } from '@/features/household/HouseholdPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 
-const BASE = (import.meta as { env: { BASE_URL: string } }).env.BASE_URL
+const BASE = import.meta.env.BASE_URL
 
 export function App() {
   return (

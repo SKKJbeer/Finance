@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: CI — Test, Tag & Deploy
 
 on:
   push:
@@ -15,7 +15,78 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+  tag-and-release:
+    name: Tag Release
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      tag: ${{ steps.get-version.outputs.tag }}
+      already-tagged: ${{ steps.check-tag.outputs.exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: get-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          if git rev-parse "v${{ steps.get-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Git tag and GitHub Release
+        if: steps.check-tag.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.get-version.outputs.version }}" -m "Release v${{ steps.get-version.outputs.version }}"
+          git push origin "v${{ steps.get-version.outputs.version }}"
+          gh release create "v${{ steps.get-version.outputs.version }}" \
+            --title "FinanzKompass v${{ steps.get-version.outputs.version }}" \
+            --notes "Automatisch generierter Release von v${{ steps.get-version.outputs.version }}. Siehe CLAUDE.md für Details." \
+            --latest
+
+  deploy:
+    name: Build & Deploy to GitHub Pages
+    needs: [test, tag-and-release]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,7 +104,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Copy 404 page for SPA routing
+      - name: Copy 404 for SPA routing
         run: cp dist/index.html dist/404.html
 
       - name: Deploy to GitHub Pages
@@ -41,4 +112,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          cname: ''

@@ -1,10 +1,99 @@
 # FinanzKompass — CLAUDE.md
 
+## Rollen-Mandat (PERMANENT — niemals ignorieren)
+
+Ich agiere als **Senior Software-Architekt mit 15+ Jahren Fintech-Erfahrung**.  
+Das bedeutet konkret:
+- Jede Entscheidung wird zuerst durch die Security-Brille bewertet
+- Keine Abkürzungen bei Datenschutz und Sicherheit, egal wie klein die Änderung
+- Architektonische Integrität vor Feature-Velocity
+- Finanz-Daten der Nutzer sind heilig — Zero-Trust gegenüber externen Systemen
+- Tests sind keine Option, sondern Pflicht — jede neue Logik bekommt Tests
+- Release-Tags sind verpflichtend bei jedem Deployment
+
+---
+
 ## Projekt-Identität
 
 **Name:** FinanzKompass  
 **Motto:** *Dein gesamtes Finanzbild. Klar. Elegant. Intelligent.*  
+**Version:** Immer aus `package.json` lesen, in App anzeigen, als Git-Tag setzen.  
 **Ziel:** Premium-Finanz-App die Aktienportfolio-Management mit Haushaltsfinanzen vereint — zunächst als GitHub Pages PWA, später als App Store App.
+
+---
+
+## SECURITY ARCHITECTURE — PRIORITÄT 1
+
+### Grundprinzip: Zero-Server-Trust für Finanzdaten
+
+```
+╔══════════════════════════════════════════════════════════╗
+║  FINANZ-DATEN VERLASSEN NIEMALS DAS GERÄT DES NUTZERS  ║
+║  Kein Backend. Kein Sync-Server. Kein Analytics.        ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+**Was das bedeutet:**
+- Alle Transaktionen, Holdings, Haushaltsausgaben → nur IndexedDB (lokal)
+- Kein User-Account erforderlich für Kernfunktionen
+- Kein Telemetry, kein Error-Tracking mit Nutzer-Daten
+- Externe API-Calls **nur** für anonyme Marktdaten (Kurse, kein Portfolio mitschicken)
+- API-Keys werden in localStorage gespeichert, nie in der DB, nie in Logs
+
+### Security-Checkliste (bei jeder Änderung prüfen)
+
+- [ ] Werden Finanzdaten an einen externen Server gesendet? → **STOP, nicht erlaubt**
+- [ ] Wird ein API-Key geloggt oder in der URL übergeben? → **STOP**
+- [ ] Sind Input-Felder gegen XSS abgesichert? (React escaping reicht für JSX)
+- [ ] Werden sensible Daten im Browser-Memory nach Nutzung bereinigt?
+- [ ] Ist der Backup-Export verschlüsselt oder zumindest klar als sensitiv markiert?
+- [ ] Ist das externe Skript/Package vertrauenswürdig + gepinnt?
+
+### Content Security Policy (CSP)
+
+Die App darf nur Verbindungen zu diesen Domains aufbauen:
+```
+default-src 'self';
+script-src 'self';
+style-src 'self' https://fonts.googleapis.com;
+font-src https://fonts.gstatic.com;
+connect-src 'self' https://www.alphavantage.co https://query2.finance.yahoo.com;
+img-src 'self' data: https:;
+```
+→ Umgesetzt via `<meta http-equiv="Content-Security-Policy">` in index.html
+
+### Lokale Datensicherheit
+
+```
+IndexedDB (Dexie.js)
+├── Zugriff nur von derselben Origin (Browser-Sandbox)
+├── Kein Zugriff durch andere Tabs/Domains
+├── Daten bleiben bei Browser-Storage-Clear verloren → Backup-Hinweis prominent!
+└── Zukunft (Phase 2): AES-256 Verschlüsselung der DB via Web Crypto API
+```
+
+### Backup-Sicherheit
+
+- Export-Dateien enthalten alle Finanzdaten → Datei-Download mit Warnung
+- Datei-Name enthält Datum, kein Username
+- Zukunft: Passwort-verschlüsselter Export via Web Crypto API
+
+### Dependency-Security
+
+- `npm audit` läuft automatisch in CI
+- Keine Packages mit bekannten High/Critical CVEs
+- Externe Scripts (Google Fonts) sind einzige Ausnahme — zukünftig selbst hosten
+
+### Phase 2 — Falls Backend nötig wird
+
+```
+Wenn Cloud-Sync kommt:
+- End-to-End Verschlüsselung: Daten werden Client-seitig verschlüsselt bevor Upload
+- Server sieht nur verschlüsselte Blobs, niemals Klartextdaten
+- Zero-Knowledge Architecture (wie Bitwarden/Proton)
+- DSGVO-konform: Recht auf Löschung, Daten-Export, Datenschutzerklärung
+- Hosting in EU (Deutschland/Frankfurt preferred)
+```
 
 ---
 
@@ -12,30 +101,34 @@
 
 ```
 FinanzKompass
-├── Phase 1: PWA auf GitHub Pages (aktuell)
-│   ├── React 18 + TypeScript
-│   ├── Vite (Build)
-│   ├── TailwindCSS v3 (Styling)
-│   ├── Zustand (State Management)
-│   ├── Dexie.js / IndexedDB (Offline Storage)
+├── Phase 1: PWA auf GitHub Pages (aktiv)
+│   ├── React 18 + TypeScript (strict)
+│   ├── Vite 5 (Build + Base-URL /Finance/)
+│   ├── TailwindCSS v4 (Styling)
+│   ├── Zustand (State, kein sensitiver State in localStorage)
+│   ├── Dexie.js / IndexedDB (100% lokale Datenhaltung)
 │   ├── Recharts (Charts)
-│   └── GitHub Actions → GitHub Pages (CI/CD)
+│   ├── Vitest + Testing Library (Unit + Integration Tests)
+│   └── GitHub Actions → Test → Tag → Deploy
 │
 ├── Phase 2: Backend + Broker-Sync (geplant)
-│   ├── Node.js / Hono Backend
-│   ├── PostgreSQL (User Data)
-│   ├── Redis (Cache für Kursdaten)
+│   ├── Hono (Edge-Runtime, minimal footprint)
+│   ├── Zero-Knowledge Sync (E2E verschlüsselt)
+│   ├── PostgreSQL (nur verschlüsselte Blobs)
 │   └── OAuth für Broker (Trade Republic, Comdirect, ING)
 │
 ├── Phase 3: Native App (geplant)
 │   ├── React Native + Expo
-│   └── Shared Business Logic mit Phase 1
+│   ├── Expo SecureStore statt AsyncStorage für Secrets
+│   └── Biometric-Auth (Face ID / Fingerprint)
 │
 └── Phase 4: KI-Agenten (geplant)
     ├── Portfolio-Analyse-Agent (Claude API)
-    ├── News-Sentiment-Agent
+    ├── News-Sentiment-Agent (nur öffentliche Daten)
     ├── Rebalancing-Empfehlungs-Agent
     └── Haushalts-Optimierungs-Agent
+    WICHTIG: KI-Agenten erhalten anonymisierte/aggregierte Daten,
+    niemals rohe Transaktionsdaten mit Timestamps
 ```
 
 ---
@@ -44,16 +137,113 @@ FinanzKompass
 
 | Bereich | Technologie | Begründung |
 |---------|-------------|------------|
-| Framework | React 18 + TypeScript | Komponenten-basiert, Typsicherheit, große Community |
-| Build | Vite 5 | Schnell, perfekt für GitHub Pages (static output) |
-| Styling | TailwindCSS v3 + custom CSS vars | Utility-first, einfach zu warten, dark mode |
-| State | Zustand | Minimal, kein Boilerplate, Persist-Middleware |
-| Storage | Dexie.js (IndexedDB) | Offline-first, strukturierte lokale DB |
-| Charts | Recharts | React-nativ, kompositionell, leicht anpassbar |
-| Icons | Lucide React | Konsistent, tree-shakeable |
-| Router | React Router v6 | SPA-Routing für GitHub Pages |
-| Forms | React Hook Form | Performance, Validation |
-| Dates | date-fns | Leichtgewichtig vs Moment.js |
+| Framework | React 18 + TypeScript strict | Typsicherheit, verhindert viele Klassen von Bugs |
+| Build | Vite 5 | Schnell, Tree-Shaking, perfekt für statisches Deployment |
+| Styling | TailwindCSS v4 | Utility-first, kein CSS-Injection-Risiko |
+| State | Zustand | Minimal, sensitiver State NICHT in localStorage persistieren |
+| Storage | Dexie.js (IndexedDB) | Lokale DB, Browser-Sandbox schützt vor Cross-Origin |
+| Charts | Recharts | React-nativ, kein externer Daten-Leak |
+| Icons | Lucide React | Tree-shakeable, inline — keine externen Requests |
+| Router | React Router v7 | SPA-Routing, `basename` auf `/Finance/` gesetzt |
+| Forms | React Hook Form | Client-seitige Validation, kein Server-Submit |
+| Dates | date-fns | Lokal, kein Timezone-Leak an Server |
+| Tests | Vitest + RTL | Schnell, Vite-nativ, Coverage-Reports |
+
+---
+
+## Versionierung & Release-Management (PFLICHT)
+
+### Semantic Versioning: `MAJOR.MINOR.PATCH`
+
+```
+MAJOR → Breaking Changes (Datenbankschema-Änderung, API-Bruch)
+MINOR → Neue Features (neue Seite, neue Berechnung)
+PATCH → Bugfixes, kleine Verbesserungen, Security-Patches
+```
+
+### Release-Prozess (automatisiert via GitHub Actions)
+
+```
+1. Code auf main pushen
+2. CI: npm test (alle Tests müssen grün sein)
+3. CI: npm run build
+4. CI: Git-Tag setzen (v{version} aus package.json)
+5. CI: GitHub Release erstellen mit Changelog
+6. CI: Deploy zu GitHub Pages
+7. App zeigt Version aus import.meta.env.VITE_APP_VERSION
+```
+
+### Version in der App
+
+- Sidebar Footer: `v0.1.0`
+- Einstellungen-Seite: Vollständige Build-Info
+- Vite injiziert `VITE_APP_VERSION` aus `package.json` zur Build-Zeit
+
+### Commit-Konvention (löst automatisches Versioning aus)
+
+```
+feat:     → MINOR version bump
+fix:      → PATCH version bump  
+security: → PATCH version bump (SOFORT releasen!)
+breaking: → MAJOR version bump
+chore:    → kein bump
+docs:     → kein bump
+test:     → kein bump
+design:   → kein bump
+```
+
+---
+
+## Test-Strategie (PFLICHT — wird stetig erweitert)
+
+### Test-Pyramide
+
+```
+        /\
+       /E2E\        (Phase 2 — Playwright)
+      /------\
+     /Integr. \     (React Testing Library — Komponenten)
+    /------------\
+   / Unit Tests   \  (Vitest — Berechnungen, Formatters, Utils)
+  /________________\
+```
+
+### Was IMMER getestet wird
+
+1. **Alle Finanz-Berechnungen** (Portfolio-Wert, FIFO, Steuer, TTWROR)
+2. **Alle Formatter-Funktionen** (Währung, Prozent, Datum)
+3. **Datenbank-Operationen** (CRUD, Migration)
+4. **Neue Features**: Jede neue Funktion bekommt mindestens einen Happy-Path + einen Edge-Case Test
+
+### Test-Dateien Konvention
+
+```
+src/
+├── lib/calculations/portfolio.ts
+├── lib/calculations/portfolio.test.ts   ← immer daneben
+├── lib/formatters/index.ts
+├── lib/formatters/index.test.ts
+└── features/portfolio/
+    ├── PortfolioPage.tsx
+    └── PortfolioPage.test.tsx           ← bei komplexen Komponenten
+```
+
+### Test-Kommandos
+
+```bash
+npm test              # Tests einmalig ausführen
+npm run test:watch    # Watch-Modus (Entwicklung)
+npm run test:coverage # Coverage-Report generieren
+```
+
+### Coverage-Ziele
+
+| Bereich | Ziel |
+|---------|------|
+| lib/calculations/ | ≥ 95% |
+| lib/formatters/ | ≥ 90% |
+| lib/db/ | ≥ 80% |
+| features/ (UI) | ≥ 60% |
 
 ---
 
@@ -65,19 +255,15 @@ FinanzKompass
 - **Portfolio Performance** — Open Source, Desktop-only, veraltet UX
 - **Finanzguru** — Budget stark, Portfolio schwach
 - **Robinhood/Yahoo Finance** — US-only fokus, kein German Tax
+- **Morningstar** — Portfolio Manager April 2025 eingestellt → freie Nutzer suchen Alternative
 
 ### Unser Wettbewerbsvorteil:
-1. **Abgeltungssteuer** als First-Class Feature
-2. **Offline-first PWA** — keine anderen Top-Apps können das
-3. **Haushalts + Portfolio kombiniert** — niemand macht das gut
-4. **KI-Agenten** für Analyse (Roadmap)
-5. **Elegant & Modern** — besser als Portfolio Performance's Desktop-UX
-
-### Schmerzpunkte der Nutzer (von Reviews):
-- Trading 212 Redesign-Backlash: Nutzer wollen Information Density, nicht leeren Raum
-- Yahoo Finance: Nur Capital Gains, keine Dividenden, kein Broker-Sync
-- Morningstar Portfolio Manager: **April 2025 eingestellt** → freie Nutzer suchen Alternative
-- Allgemein: Manual Entry ist mühsam, CSV-Import als Minimum
+1. **Security & Privacy First** — Daten verlassen das Gerät nie (Alleinstellungsmerkmal!)
+2. **Abgeltungssteuer** als First-Class Feature
+3. **Offline-first PWA** — keine anderen Top-Apps können das
+4. **Haushalts + Portfolio kombiniert** — niemand macht das gut
+5. **KI-Agenten** für Analyse (Roadmap)
+6. **Elegant & Modern** — besser als Portfolio Performance's Desktop-UX
 
 ---
 
@@ -91,83 +277,65 @@ FinanzKompass
 
 ### Farb-Palette
 ```css
-/* Primäre Palette */
---color-bg-primary:    #0a0b0e;   /* Fast-Schwarz, kein echtes Schwarz */
---color-bg-secondary:  #13151a;   /* Card-Hintergrund */
---color-bg-tertiary:   #1c1f28;   /* Hover-States, Input-Backgrounds */
---color-border:        #2a2d3a;   /* Subtile Trennlinien */
-
-/* Akzentfarben */
---color-accent-blue:   #3b82f6;   /* Primary CTA, Links */
---color-accent-purple: #8b5cf6;   /* Secondary Highlight */
---color-accent-cyan:   #06b6d4;   /* Charts, Trends */
-
-/* Semantik */
---color-gain:          #22c55e;   /* Grün = Gewinn */
---color-loss:          #ef4444;   /* Rot = Verlust */
---color-neutral:       #94a3b8;   /* Neutral/Secondary Text */
-
-/* Text */
+--color-bg-primary:    #0a0b0e;
+--color-bg-secondary:  #13151a;
+--color-bg-tertiary:   #1c1f28;
+--color-border:        #2a2d3a;
+--color-accent:        #3b82f6;
+--color-accent-purple: #8b5cf6;
+--color-accent-cyan:   #06b6d4;
+--color-gain:          #22c55e;
+--color-loss:          #ef4444;
 --color-text-primary:  #f1f5f9;
 --color-text-secondary: #94a3b8;
---color-text-muted:    #64748b;
+--color-muted:         #64748b;
 ```
-
-### Typografie
-- **Font:** Inter (Variable, Google Fonts)
-- **Zahlen:** Tabular Numbers (font-variant-numeric: tabular-nums)
-- **Hierarchie:** 
-  - Headlines: 600 weight
-  - Body: 400
-  - Labels/Muted: 400, --color-text-secondary
-
-### Komponenten-Prinzipien
-- Cards: `bg-secondary + border + rounded-xl + shadow`
-- KPI-Cards: Grosse Zahl oben, Delta darunter, Trend-Pfeil
-- Charts: Area-Charts für Portfolio-Wert, Donut für Allocation
-- Tables: Sortierbar, kompakt, zebra-striping dezent
 
 ---
 
 ## Feature-Roadmap
 
-### Phase 1a — Core MVP (aktuell)
-- [ ] Projekt-Setup (Vite + React + TS + Tailwind)
-- [ ] GitHub Actions CI/CD → GitHub Pages
-- [ ] Design System / Tokens
-- [ ] Layout: Sidebar-Navigation (Desktop) + Bottom-Nav (Mobile)
-- [ ] Dashboard-Seite mit KPI-Cards
-- [ ] Portfolio-Übersicht (Holdings-Liste)
-- [ ] Position manuell erfassen (Kauf/Verkauf)
-- [ ] Lokale Persistenz (Dexie.js)
-- [ ] Kurs-Daten via Alpha Vantage API (mit Cache)
-- [ ] Profit/Loss Berechnung (realized + unrealized)
-- [ ] Portfolio-Wert Chart (1W / 1M / 3M / YTD / 1Y / All)
-- [ ] Asset-Allocation Donut Chart
+### Phase 1a — Core MVP ✅ Deployed
+- [x] Projekt-Setup (Vite + React + TS + Tailwind)
+- [x] GitHub Actions CI/CD → GitHub Pages
+- [x] Design System / Tokens
+- [x] Layout: Sidebar-Navigation (Desktop) + Bottom-Nav (Mobile)
+- [x] Dashboard-Seite mit KPI-Cards + Charts
+- [x] Portfolio-Übersicht (Holdings-Liste, sortierbar)
+- [x] Position manuell erfassen (Kauf/Verkauf/Dividende)
+- [x] Lokale Persistenz (Dexie.js / IndexedDB)
+- [x] Haushalt-Modul (Ausgaben-Kategorien, Sparquote)
+- [x] Einstellungen (API-Key, Abgeltungssteuer, Backup)
+- [x] Security Architecture dokumentiert
+- [x] Test-Setup (Vitest)
+- [x] Release-Tagging (Git Tags + GitHub Releases)
+- [x] Version sichtbar in App
 
 ### Phase 1b — Portfolio-Features
+- [ ] Live-Kurse via Alpha Vantage (mit User API-Key)
 - [ ] Dividenden-Tracking und -Kalender
-- [ ] Abgeltungssteuer-Berechnung (25% + SolZ, Sparerpauschbetrag €1.000)
+- [ ] Abgeltungssteuer-Dashboard
 - [ ] Performance vs Benchmark (DAX, S&P 500, MSCI World)
-- [ ] CSV-Import (Depot-Exports von Trade Republic, Comdirect, ING)
-- [ ] Sektoren-Analyse (Übergewichtungen erkennen)
-- [ ] Kursalarme (Zielkurs, % Änderung)
-- [ ] News-Feed für eigene Holdings
+- [ ] CSV-Import (Trade Republic, Comdirect, ING)
+- [ ] Sektoren-Analyse (Übergewichtungen)
+- [ ] Kursalarme
 
 ### Phase 1c — Haushalts-Modul
-- [ ] Ausgaben-Kategorien (Miete, Lebensmittel, Transport, etc.)
+- [ ] Echte CRUD für Ausgaben
 - [ ] Monatliches Budget + Ist-Vergleich
-- [ ] Einnahmen/Ausgaben-Übersicht
-- [ ] Netto-Vermögen Gesamtbild (Portfolio + Cash + Schulden)
-- [ ] Sparquote-Berechnung
+- [ ] Netto-Vermögen Gesamtbild
+- [ ] Wiederkehrende Ausgaben
 
-### Phase 2 — Backend + AI (geplant)
-- [ ] User-Authentifizierung
-- [ ] Cloud-Sync (Daten geräteübergreifend)
+### Phase 2 — Zero-Knowledge Backend
+- [ ] E2E-verschlüsselter Cloud-Sync
 - [ ] Broker-Integration (Trade Republic API)
-- [ ] KI-Portfolio-Analyst (Claude API)
-- [ ] Smart Alerts (KI-basiert)
+- [ ] Biometric-Auth
+
+### Phase 3 — KI-Agenten
+- [ ] Portfolio-Analyse-Agent (Claude API)
+- [ ] Anonymisierte Datenweitergabe an KI
 - [ ] Rebalancing-Empfehlungen
+- [ ] Haushalts-Optimierung
 
 ---
 
@@ -175,42 +343,32 @@ FinanzKompass
 
 ```
 src/
-├── assets/              # Bilder, Fonts, Icons
-├── components/          # Wiederverwendbare UI-Komponenten
-│   ├── ui/              # Basis-Elemente (Button, Card, Badge, Input...)
-│   ├── charts/          # Chart-Komponenten (LineChart, DonutChart, AreaChart)
-│   ├── portfolio/       # Portfolio-spezifische Komponenten
-│   ├── household/       # Haushalts-Komponenten
-│   └── layout/          # Navigation, Header, Sidebar
-├── features/            # Feature-Module (kolociert: Logik + UI)
-│   ├── dashboard/       # Dashboard-Feature
-│   ├── portfolio/       # Portfolio-Management
-│   ├── transactions/    # Transaktions-Verwaltung
-│   ├── dividends/       # Dividenden-Tracking
-│   ├── household/       # Haushalts-Verwaltung
-│   └── settings/        # App-Einstellungen
-├── hooks/               # Custom React Hooks
-├── lib/                 # Utilities, Helpers
-│   ├── api/             # API-Clients (Alpha Vantage, Yahoo Finance)
-│   ├── db/              # Dexie.js Datenbank-Schema
-│   ├── calculations/    # Finanz-Berechnungen (P&L, TTWROR, Tax)
-│   └── formatters/      # Zahlen, Währungen, Datum formatieren
+├── components/
+│   ├── ui/              # Basis-Elemente
+│   ├── charts/          # Chart-Komponenten
+│   └── layout/          # Navigation, Sidebar
+├── features/            # Feature-Module (Logik + UI kolociert)
+│   ├── dashboard/
+│   ├── portfolio/
+│   ├── transactions/
+│   ├── household/
+│   └── settings/
+├── lib/
+│   ├── api/             # Nur anonyme Markt-API-Calls
+│   ├── calculations/    # Finanz-Berechnungen + Tests
+│   ├── db/              # Dexie.js Schema
+│   ├── formatters/      # Formatter + Tests
+│   └── security/        # Crypto-Utils (Phase 2)
 ├── stores/              # Zustand Stores
-│   ├── portfolioStore.ts
-│   ├── marketDataStore.ts
-│   └── settingsStore.ts
-├── types/               # TypeScript Typ-Definitionen
-│   └── index.ts
-├── App.tsx
-├── main.tsx
-└── index.css
+├── types/               # TypeScript Typen
+└── test/                # Test-Setup, Mocks
 ```
 
 ---
 
 ## Finanz-Berechnungs-Logik
 
-### Kernberechnungen (implementieren in `lib/calculations/`)
+### Kernberechnungen
 
 **Unrealisierter Gewinn/Verlust:**
 ```
@@ -219,186 +377,95 @@ unrealizedPnLPercent = (currentPrice / averageCostBasis - 1) × 100
 ```
 
 **Realisierter Gewinn (FIFO):**
-- Käufe in Queue, bei Verkauf älteste Lots zuerst verbrauchen
-- Realisierter Gewinn = Verkaufspreis - FIFO-Einstandspreis
-
-**Time-Weighted Rate of Return (TTWROR / TTWROR):**
-```
-TTWROR = (∏ (1 + Rperiod)) - 1
-wobei Rperiod = (EndValue - StartValue - Cashflow) / (StartValue + Cashflow)
-```
+- Käufe in Queue, bei Verkauf älteste Lots zuerst
+- Realisierter Gewinn = Verkaufspreis − FIFO-Einstandspreis − anteilige Gebühren
 
 **Abgeltungssteuer (Deutschland):**
 ```
-taxableGain = realizedGain - sparerpauschbetrag (max €1.000/Person)
+taxableGain = max(0, realizedGain + dividendIncome - sparerpauschbetrag)
 abgeltungsteuer = taxableGain × 0.25
 solidaritaetszuschlag = abgeltungsteuer × 0.055
-kirchensteuer = 0 (opt-in, 8-9%)
 gesamtsteuer = abgeltungsteuer + solidaritaetszuschlag
 ```
 
 **Durchschnittlicher Einstandspreis:**
 ```
-averageCostBasis = totalCost / totalShares
-(bei Zukauf: (oldCost + newPurchaseCost) / (oldShares + newShares))
+averageCostBasis = totalInvestedCost / totalShares
 ```
 
 ---
 
-## API-Strategie
+## API-Strategie (Security-konform)
 
-### Kurs-Daten (Phase 1)
-- **Primary:** Alpha Vantage (Gratis: 25 Requests/Tag, 5/Minute)
-- **Fallback:** Yahoo Finance inoffiziell via `/v8/finance/chart/{symbol}`
-- **Cache:** IndexedDB, TTL 15 Minuten für Kurse, 24h für historische Daten
+### Erlaubte externe Verbindungen:
+- **Alpha Vantage** — anonyme Kursdaten (kein Portfolio, kein User-ID)
+- **Google Fonts** — Schriftarten (kein JS, nur CSS+Font-Files)
 
-### Wichtig: API-Keys
-- API-Keys NIEMALS ins Repository commiten
-- Nutzer trägt eigenen Alpha Vantage Key in den App-Settings ein
-- Key wird in localStorage gespeichert (nicht in DB)
+### Nicht erlaubt:
+- ❌ Portfolio-Daten an externe APIs
+- ❌ Analytics (Google Analytics, Mixpanel, etc.)
+- ❌ Error-Tracking mit User-Kontext (Sentry mit PII)
+- ❌ Externe CDN-Scripts
 
-### Kurs-Endpunkte die wir nutzen:
-```
-Alpha Vantage:
-  GET GLOBAL_QUOTE          → Aktueller Kurs
-  GET TIME_SERIES_DAILY     → Historische Kurse (portfolio chart)
-  GET SYMBOL_SEARCH         → Aktien-Suche beim Erfassen
-
-Yahoo Finance (inoffiziell, als Fallback):
-  /v8/finance/chart/{symbol}?interval=1d&range=1y
-```
+### API-Keys:
+- Nutzer bringt eigenen Alpha Vantage Key (25/Tag kostenlos)
+- Key in `localStorage['finanzkompass-settings']` (Zustand persist)
+- Key NIEMALS in URL-Parametern, Console-Logs, oder Error-Messages
 
 ---
 
-## GitHub Pages Deployment
+## Architecture Decision Records
 
-```yaml
-# .github/workflows/deploy.yml
-# Automatisch bei Push auf main
-# Build: npm run build
-# Deploy: peaceiris/actions-gh-pages@v4
-# Base URL: /Finance/ (Repository-Name)
-```
+### ADR-001: Zero-Server für Finanzdaten
+**Entscheidung:** Alle Finanzdaten bleiben lokal (IndexedDB)  
+**Begründung:** Maximaler Datenschutz, kein DSGVO-Aufwand, kein Hack-Risiko auf Server  
+**Trade-off:** Kein Multi-Gerät Sync in Phase 1  
+**Mitigation:** Backup-Export/Import (JSON), CSV
 
-**Wichtig für React Router + GitHub Pages:**
-- `vite.config.ts`: `base: '/Finance/'`
-- `404.html` Redirect-Trick für Client-Side-Routing
-- Router `basename="/Finance"`
+### ADR-002: PWA statt Native App zuerst
+**Entscheidung:** GitHub Pages PWA  
+**Begründung:** Zero-Cost, kein App Store Review, sofort deploybar  
+**Trade-off:** Kein Push-Notification auf iOS
 
----
+### ADR-003: User-eigener API-Key (Alpha Vantage)
+**Entscheidung:** Kein zentraler API-Key auf einem Server  
+**Begründung:** Kein Backend = kein Key-Leak-Risiko, keine Kosten  
+**Trade-off:** Setup-Hürde für neue Nutzer  
+**Mitigation:** Demo-Modus mit Mock-Daten
 
-## Entwicklungs-Konventionen
+### ADR-004: Semantic Versioning + Git-Tags (PFLICHT)
+**Entscheidung:** Jedes Deployment bekommt einen Git-Tag und GitHub Release  
+**Begründung:** Nachvollziehbarkeit, Rollback möglich, Version in App sichtbar  
 
-### Code-Stil
-- TypeScript strict mode: an
-- Functional Components only (keine Class Components)
-- Custom Hooks für Logik (aus JSX heraushalten)
-- Named Exports (keine default exports für Komponenten)
-- Datei-Name = Komponenten-Name (PascalCase)
-
-### Commit-Nachrichten
-```
-feat: Neue Funktion
-fix: Bug-Fix
-design: UI/UX Änderung
-refactor: Code-Umstrukturierung
-docs: Dokumentation
-```
-
-### Finanz-Daten-Typen (wichtig!)
-- Alle Geldbeträge in der DB als `number` (Euro, Cent-Genauigkeit mit toFixed(2))
-- Datum immer als ISO-String: `"2025-01-15"`
-- Symbol immer als UPPERCASE: `"AAPL"`, `"VOW3.DE"`
-- Menge (quantity) als `number` (Dezimalanteile von ETFs möglich!)
-
----
-
-## Datenbank-Schema (Dexie.js / IndexedDB)
-
-```typescript
-// Tabellen:
-holdings         // Aktuelle Positionen (aggregiert)
-transactions     // Alle Käufe/Verkäufe/Dividenden (audit trail)
-priceCache       // Gecachte Kursdaten
-households       // Haushalts-Ausgaben und -Einnahmen
-budgets          // Monatliche Budget-Pläne
-alerts           // Kursalarme
-settings         // App-Einstellungen
-```
-
----
-
-## Geplante KI-Agenten (Phase 2-3)
-
-### Portfolio-Analyse-Agent
-- Input: Alle Holdings + Transaktionen + Marktdaten
-- Output: Bewertung der Diversifikation, Klumpenrisiken, Performance-Attributierung
-- Tool: Claude API (`claude-sonnet-4-6` oder `claude-opus-4-8`)
-
-### Rebalancing-Agent
-- Input: Aktuelle Allocation + Ziel-Allocation + Marktpreise
-- Output: Konkrete Kauf/Verkauf-Empfehlungen mit Steueroptimierung
-
-### Haushalts-Optimierungs-Agent
-- Input: Haushaltsausgaben der letzten 3-6 Monate
-- Output: Sparpotenziale, Ausgaben-Muster, Investierbare Beträge
-
-### News-Sentiment-Agent
-- Input: News zu Holdings aus dem Portfolio
-- Output: Zusammenfassung + Sentiment-Score + Handlungsempfehlung
-
----
-
-## Wichtige Entscheidungen (Architecture Decision Records)
-
-### ADR-001: PWA statt Native App zuerst
-**Entscheidung:** GitHub Pages PWA als erstes Deployment  
-**Begründung:** Zero-Cost Hosting, kein App Store Review, sofort deploybar, offline via Service Worker  
-**Trade-off:** Kein Push-Notification-Support auf iOS, kleinerer App Store Exposure  
-
-### ADR-002: Lokale Datenhaltung (kein Backend Phase 1)
-**Entscheidung:** Alle Daten in IndexedDB (Dexie.js), kein Backend-Server  
-**Begründung:** Kein Server-Kosten, Datenschutz-konform, funktioniert offline  
-**Trade-off:** Kein Multi-Gerät Sync in Phase 1, Daten bei Browser-Reset verloren  
-**Mitigation:** Export/Import Funktion (JSON), CSV-Backup  
-
-### ADR-003: Alpha Vantage als Primary API (User-Key)
-**Entscheidung:** Nutzer bringt eigenen API-Key mit  
-**Begründung:** Kein API-Kosten für uns, kostenlos für Nutzer (25/Tag reicht für Portfolio-Tracker)  
-**Trade-off:** Setup-Aufwand für Nutzer, Onboarding-Hürde  
-**Mitigation:** Demo-Modus mit Mock-Daten, einfache API-Key Eingabe im Onboarding  
-
-### ADR-004: Zustand über Context API / Redux
-**Entscheidung:** Zustand für globalen State  
-**Begründung:** Minimal, kein Boilerplate, Persist-Middleware für localStorage  
-**Trade-off:** Kein eingebautes DevTools wie Redux (aber Zustand hat Browser Extension)  
-
-### ADR-005: Recharts über Chart.js / D3
-**Entscheidung:** Recharts für alle Charts  
-**Begründung:** React-nativ, deklarativ, einfach zu customizen, TypeScript-Support  
-**Trade-off:** Weniger Flexibilität als D3 für komplexe Custom-Charts  
+### ADR-005: Zero-Knowledge für Phase 2
+**Entscheidung:** Wenn Cloud-Sync kommt, nur E2E-verschlüsselt  
+**Begründung:** Server soll niemals Klartextdaten sehen können  
 
 ---
 
 ## Status-Tracker
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Projekt-Setup | 🟡 In Progress | Vite + React + TS + Tailwind |
-| GitHub Actions CI/CD | ⬜ Geplant | |
-| Design System | ⬜ Geplant | |
-| Navigation/Layout | ⬜ Geplant | |
-| Dashboard | ⬜ Geplant | |
-| Portfolio-Holdings | ⬜ Geplant | |
-| Transaktionen | ⬜ Geplant | |
-| Kurs-API Integration | ⬜ Geplant | |
-| Charts | ⬜ Geplant | |
-| Abgeltungssteuer | ⬜ Geplant | |
-| Dividenden | ⬜ Geplant | |
-| Haushalts-Modul | ⬜ Geplant | |
-| CSV-Import | ⬜ Geplant | |
-| KI-Agenten | ⬜ Phase 2 | |
+| Feature | Status | Version |
+|---------|--------|---------|
+| Projekt-Setup | ✅ Done | v0.1.0 |
+| GitHub Actions CI/CD | ✅ Done | v0.1.0 |
+| Design System | ✅ Done | v0.1.0 |
+| Dashboard | ✅ Done | v0.1.0 |
+| Portfolio-Holdings | ✅ Done | v0.1.0 |
+| Transaktionen | ✅ Done | v0.1.0 |
+| Haushalt-Modul | ✅ Done | v0.1.0 |
+| Einstellungen | ✅ Done | v0.1.0 |
+| Security Architecture | ✅ Done | v0.1.0 |
+| Test-Setup (Vitest) | ✅ Done | v0.1.0 |
+| Release-Tagging | ✅ Done | v0.1.0 |
+| Version in App | ✅ Done | v0.1.0 |
+| Live Kursdaten (Alpha Vantage) | 🟡 Next | v0.2.0 |
+| Abgeltungssteuer-Dashboard | 🟡 Next | v0.2.0 |
+| CSV-Import | 🟡 Next | v0.2.0 |
+| KI-Agenten | ⬜ Geplant | v1.0.0 |
+| Zero-Knowledge Sync | ⬜ Geplant | v1.0.0 |
 
 ---
 
-*Letzte Aktualisierung: 2026-06-19*
+*Senior Architekt: Claude — Security-First, Privacy-First, Test-First*  
+*Letzte Aktualisierung: 2026-06-19 — v0.1.0*

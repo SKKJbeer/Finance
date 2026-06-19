@@ -50,7 +50,9 @@ export function Sidebar() {
       </nav>
 
       <div className="p-3 border-t border-[var(--color-border)]">
-        <p className="text-[10px] text-[var(--color-muted)] px-3">v0.1.0 · Demo Mode</p>
+        <p className="text-[10px] text-[var(--color-muted)] px-3">
+        v{import.meta.env.VITE_APP_VERSION} · Demo Mode
+      </p>
       </div>
     </aside>
   )
