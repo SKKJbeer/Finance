@@ -60,9 +60,10 @@ export function SettingsPage() {
         </Card>
 
         <Card>
-          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1">Alpha Vantage API</h2>
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1">Kursdaten (optional)</h2>
           <p className="text-xs text-[var(--color-muted)] mb-4">
-            Für Live-Kursdaten benötigst du einen kostenlosen API-Key von Alpha Vantage (25 Anfragen/Tag gratis).
+            Live-Kurse werden automatisch von Yahoo Finance geladen — kein Key nötig.
+            Ein kostenloser Alpha-Vantage-Key dient nur als Fallback und für die erweiterte Wertpapier-Suche.
           </p>
           <div>
             <label className={labelClass}>API-Key</label>

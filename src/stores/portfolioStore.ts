@@ -1,9 +1,8 @@
 import { create } from 'zustand'
 import { db } from '@/lib/db'
 import { computeHoldings, enrichHoldingsWithPrices } from '@/lib/calculations/portfolio'
-import { fetchMultipleQuotes } from '@/lib/api/marketData'
-import { getReferencePrices } from '@/lib/api/securities'
-import type { Transaction, Holding } from '@/types'
+import { fetchQuotesYahoo, fetchMultipleQuotes } from '@/lib/api/marketData'
+import type { Transaction, Holding, PriceCache } from '@/types'
 import { nanoid } from '@/lib/nanoid'
 
 interface PortfolioStore {
@@ -52,25 +51,34 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   },
 
   refreshPrices: async () => {
-    const holdings = get().holdings
-    const symbols = holdings.map(h => h.symbol)
+    const symbols = get().holdings.map(h => h.symbol)
     if (symbols.length === 0) {
       set({ pricesLive: false })
       return
     }
 
-    const apiKey = get().apiKey
-    const refMap = getReferencePrices(symbols)
+    // Primär: echte Live-Kurse von Yahoo (kein Key nötig)
+    const quotes: Map<string, PriceCache> = await fetchQuotesYahoo(symbols)
 
+    // Fallback für noch fehlende Symbole: Alpha Vantage (falls Key hinterlegt)
+    const apiKey = get().apiKey
     if (apiKey) {
-      const quotes = await fetchMultipleQuotes(symbols, apiKey)
-      const priceMap = new Map(refMap)
-      for (const [sym, q] of quotes.entries()) {
-        priceMap.set(sym, { price: q.price, dayChange: q.dayChange, dayChangePercent: q.dayChangePercent })
+      const missing = symbols.filter(s => !quotes.has(s))
+      if (missing.length > 0) {
+        const av = await fetchMultipleQuotes(missing, apiKey)
+        for (const [sym, q] of av.entries()) quotes.set(sym, q)
       }
-      set({ holdings: enrichHoldingsWithPrices(get().holdings, priceMap), pricesLive: quotes.size > 0 })
-    } else {
-      set({ holdings: enrichHoldingsWithPrices(get().holdings, refMap), pricesLive: false })
     }
+
+    const priceMap = new Map(
+      Array.from(quotes.entries()).map(([sym, q]) => [
+        sym,
+        { price: q.price, dayChange: q.dayChange, dayChangePercent: q.dayChangePercent },
+      ])
+    )
+    set({
+      holdings: enrichHoldingsWithPrices(get().holdings, priceMap),
+      pricesLive: quotes.size > 0,
+    })
   },
 }))

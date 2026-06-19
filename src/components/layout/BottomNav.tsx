@@ -11,18 +11,18 @@ const navItems = [
 
 export function BottomNav() {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
-      <div className="flex items-center h-16">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)] pb-[env(safe-area-inset-bottom)]">
+      <div className="flex items-stretch h-16">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) => `
-              flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors
+              flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:bg-[var(--color-bg-tertiary)]
               ${isActive
                 ? 'text-[var(--color-accent)]'
-                : 'text-[var(--color-muted)] hover:text-[var(--color-text-secondary)]'
+                : 'text-[var(--color-muted)]'
               }
             `}
           >

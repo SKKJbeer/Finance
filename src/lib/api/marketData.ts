@@ -1,8 +1,74 @@
-import type { PriceCache, HistoricalPrice } from '@/types'
+import type { PriceCache, HistoricalPrice, Currency } from '@/types'
 import { db } from '@/lib/db'
 
 const CACHE_TTL_MINUTES = 15
 const CACHE_TTL_HISTORICAL_HOURS = 24
+
+const YAHOO_HOSTS = [
+  'https://query1.finance.yahoo.com',
+  'https://query2.finance.yahoo.com',
+]
+
+interface YahooMeta {
+  regularMarketPrice?: number
+  chartPreviousClose?: number
+  previousClose?: number
+  currency?: string
+}
+
+/**
+ * Holt echte Live-Kurse von Yahoo Finance (kein API-Key nötig).
+ * Symbole müssen Yahoo-kompatibel sein (z.B. MBG.DE, AAPL, BTC-USD).
+ * Bei Fehler (CORS/Netzwerk) wird der gecachte Wert genutzt, niemals ein
+ * erfundener Kurs.
+ */
+async function fetchQuoteYahoo(symbol: string): Promise<PriceCache | null> {
+  const cached = await db.priceCache.get(symbol)
+  if (cached && isCacheValid(cached.fetchedAt, CACHE_TTL_MINUTES)) {
+    return cached
+  }
+
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const url = `${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const data = await res.json() as { chart?: { result?: Array<{ meta?: YahooMeta }> } }
+      const meta = data.chart?.result?.[0]?.meta
+      if (!meta || typeof meta.regularMarketPrice !== 'number') continue
+
+      const price = meta.regularMarketPrice
+      const prev = meta.chartPreviousClose ?? meta.previousClose ?? price
+      const dayChange = price - prev
+      const priceData: PriceCache = {
+        symbol,
+        price,
+        dayChange,
+        dayChangePercent: prev ? (dayChange / prev) * 100 : 0,
+        currency: (meta.currency as Currency) || 'USD',
+        fetchedAt: new Date().toISOString(),
+      }
+      await db.priceCache.put(priceData)
+      return priceData
+    } catch {
+      // nächsten Host versuchen
+    }
+  }
+
+  return cached ?? null
+}
+
+/** Holt Live-Kurse für mehrere Symbole parallel von Yahoo Finance. */
+export async function fetchQuotesYahoo(symbols: string[]): Promise<Map<string, PriceCache>> {
+  const results = new Map<string, PriceCache>()
+  await Promise.all(
+    symbols.map(async (symbol) => {
+      const quote = await fetchQuoteYahoo(symbol)
+      if (quote) results.set(symbol, quote)
+    })
+  )
+  return results
+}
 
 interface AlphaVantageQuote {
   '01. symbol': string
@@ -133,11 +199,3 @@ export async function searchSymbols(query: string, apiKey: string): Promise<Sear
     return []
   }
 }
-
-export const DEMO_PRICES = new Map<string, PriceCache>([
-  ['AAPL', { symbol: 'AAPL', price: 213.49, dayChange: 2.31, dayChangePercent: 1.09, currency: 'USD', fetchedAt: new Date().toISOString() }],
-  ['MSFT', { symbol: 'MSFT', price: 427.89, dayChange: -1.23, dayChangePercent: -0.29, currency: 'USD', fetchedAt: new Date().toISOString() }],
-  ['VOW3.DE', { symbol: 'VOW3.DE', price: 89.42, dayChange: 0.88, dayChangePercent: 0.99, currency: 'EUR', fetchedAt: new Date().toISOString() }],
-  ['IWDA.AS', { symbol: 'IWDA.AS', price: 98.76, dayChange: 0.54, dayChangePercent: 0.55, currency: 'EUR', fetchedAt: new Date().toISOString() }],
-  ['BTC-USD', { symbol: 'BTC-USD', price: 67234.00, dayChange: -823.00, dayChangePercent: -1.21, currency: 'USD', fetchedAt: new Date().toISOString() }],
-])

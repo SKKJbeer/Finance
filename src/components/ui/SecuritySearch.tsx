@@ -54,7 +54,6 @@ export function SecuritySearch({ onSelect, apiKey, autoFocus }: Props) {
             type: (r.type?.toLowerCase().includes('etf') ? 'etf' : 'stock') as AssetType,
             currency: (r.currency as Currency) || 'USD',
             exchange: r.region || '—',
-            price: 0,
           })
         }
       }
@@ -78,7 +77,7 @@ export function SecuritySearch({ onSelect, apiKey, autoFocus }: Props) {
   function pickManual() {
     const sym = query.trim().toUpperCase()
     if (!sym) return
-    pick({ symbol: sym, name: sym, type: 'stock', currency: 'EUR', exchange: '—', price: 0 })
+    pick({ symbol: sym, name: sym, type: 'stock', currency: 'EUR', exchange: '—' })
   }
 
   const showManual = query.trim().length >= 1 &&
@@ -128,14 +127,14 @@ export function SecuritySearch({ onSelect, apiKey, autoFocus }: Props) {
       </div>
 
       {open && totalOptions > 0 && (
-        <div className="absolute z-20 mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
+        <div className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] overflow-hidden max-h-[50vh] overflow-y-auto">
           {results.map((sec, i) => (
             <button
               key={sec.symbol}
               type="button"
               onClick={() => pick(sec)}
               onMouseEnter={() => setActiveIndex(i)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors active:bg-[var(--color-bg-tertiary)] ${
                 i === activeIndex ? 'bg-[var(--color-bg-tertiary)]' : ''
               }`}
             >

@@ -34,11 +34,6 @@ export function AddTransactionModal({ onClose }: Props) {
   const [showNotes, setShowNotes] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  function handleSelect(sec: Security) {
-    setSecurity(sec)
-    if (sec.price > 0) setPrice(String(sec.price))
-  }
-
   const qNum = parseFloat(quantity) || 0
   const pNum = parseFloat(price) || 0
   const fNum = parseFloat(fees) || 0
@@ -71,29 +66,35 @@ export function AddTransactionModal({ onClose }: Props) {
   const submitLabel = type === 'sell' ? 'Verkauf' : isDividend ? 'Dividende' : 'Kauf'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex md:items-center md:justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full md:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl md:rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)] shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+
+      <div className="relative w-full h-[100dvh] md:h-auto md:max-h-[88dvh] md:max-w-md md:my-auto bg-[var(--color-bg-secondary)] md:border md:border-[var(--color-border)] md:rounded-2xl shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))] md:pt-4 border-b border-[var(--color-border)]">
           <h2 className="font-semibold text-[var(--color-text-primary)]">
             {security ? 'Transaktion erfassen' : 'Wertpapier wählen'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--color-bg-tertiary)] text-[var(--color-muted)] transition-colors">
-            <X size={18} />
+          <button
+            onClick={onClose}
+            aria-label="Schließen"
+            className="p-2 -mr-2 rounded-lg hover:bg-[var(--color-bg-tertiary)] active:bg-[var(--color-bg-tertiary)] text-[var(--color-muted)] transition-colors"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        {/* Body (scrollbar) */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {!security ? (
             <>
-              <SecuritySearch onSelect={handleSelect} apiKey={settings.alphaVantageApiKey} autoFocus />
+              <SecuritySearch onSelect={setSecurity} apiKey={settings.alphaVantageApiKey} autoFocus />
               <p className="text-xs text-[var(--color-muted)] px-1">
-                Tippe Name oder Symbol — z.B. „Apple", „SAP" oder „MSCI World". Tastatur: ↑ ↓ und Enter.
+                Tippe Name oder Symbol — z.B. „Apple", „Mercedes" oder „MSCI World".
               </p>
             </>
           ) : (
             <>
-              {/* Gewähltes Wertpapier */}
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-tertiary)] border border-[var(--color-border)]">
                 <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-secondary)]">
                   {security.symbol.replace(/[-.].*$/, '').slice(0, 3)}
@@ -104,20 +105,19 @@ export function AddTransactionModal({ onClose }: Props) {
                 </div>
                 <button
                   onClick={() => { setSecurity(null); setPrice('') }}
-                  className="flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline shrink-0"
+                  className="flex items-center gap-1 text-xs text-[var(--color-accent)] active:opacity-70 shrink-0 px-2 py-1"
                 >
                   <ChevronLeft size={13} /> Ändern
                 </button>
               </div>
 
-              {/* Typ-Umschalter */}
               <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-[var(--color-bg-tertiary)] border border-[var(--color-border)]">
                 {TYPE_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setType(opt.value)}
-                    className={`py-2 text-sm font-medium rounded-md transition-colors ${
-                      type === opt.value ? opt.activeClass : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                    className={`py-2.5 text-sm font-medium rounded-md transition-colors ${
+                      type === opt.value ? opt.activeClass : 'text-[var(--color-text-secondary)] active:bg-[var(--color-bg-primary)]'
                     }`}
                   >
                     {opt.label}
@@ -125,19 +125,15 @@ export function AddTransactionModal({ onClose }: Props) {
                 ))}
               </div>
 
-              {/* Menge & Kurs */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>{isDividend ? 'Anteile' : 'Menge'}</label>
                   <input
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    type="number"
+                    type="text"
                     inputMode="decimal"
-                    step="any"
-                    min="0"
                     placeholder="0"
-                    autoFocus
                     className={inputClass}
                   />
                 </div>
@@ -147,10 +143,8 @@ export function AddTransactionModal({ onClose }: Props) {
                     <input
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
-                      type="number"
+                      type="text"
                       inputMode="decimal"
-                      step="any"
-                      min="0"
                       placeholder="0,00"
                       className={`${inputClass} pr-12`}
                     />
@@ -159,17 +153,14 @@ export function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Gebühren & Datum */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Gebühren <span className="text-[var(--color-muted)] font-normal">(optional)</span></label>
                   <input
                     value={fees}
                     onChange={(e) => setFees(e.target.value)}
-                    type="number"
+                    type="text"
                     inputMode="decimal"
-                    step="any"
-                    min="0"
                     placeholder="0,00"
                     className={inputClass}
                   />
@@ -186,7 +177,6 @@ export function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Notiz (einklappbar) */}
               {showNotes ? (
                 <div>
                   <label className={labelClass}>Notiz</label>
@@ -200,32 +190,34 @@ export function AddTransactionModal({ onClose }: Props) {
               ) : (
                 <button
                   onClick={() => setShowNotes(true)}
-                  className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] active:opacity-70 py-1"
                 >
                   <Plus size={13} /> Notiz hinzufügen
                 </button>
               )}
 
-              {/* Live-Summe */}
               <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)]">
                 <span className="text-sm text-[var(--color-text-secondary)]">{totalLabel}</span>
                 <span className="text-lg font-semibold text-[var(--color-text-primary)]">
                   {formatCurrency(total, security.currency)}
                 </span>
               </div>
-
-              <div className="flex gap-2 pt-1">
-                <Button type="button" variant="secondary" onClick={onClose} fullWidth>
-                  Abbrechen
-                </Button>
-                <Button type="button" variant="primary" onClick={handleSubmit} disabled={!canSubmit} fullWidth>
-                  <Check size={15} />
-                  {submitting ? 'Speichern…' : `${submitLabel} speichern`}
-                </Button>
-              </div>
             </>
           )}
         </div>
+
+        {/* Footer (immer erreichbar, über Home-Leiste) */}
+        {security && (
+          <div className="shrink-0 flex gap-2 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+            <Button type="button" variant="secondary" onClick={onClose} fullWidth>
+              Abbrechen
+            </Button>
+            <Button type="button" variant="primary" onClick={handleSubmit} disabled={!canSubmit} fullWidth>
+              <Check size={15} />
+              {submitting ? 'Speichern…' : `${submitLabel} speichern`}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -233,7 +225,7 @@ export function AddTransactionModal({ onClose }: Props) {
 
 const labelClass = 'text-xs font-medium text-[var(--color-text-secondary)] mb-1 block'
 const inputClass = `
-  w-full px-3 py-2 text-sm rounded-lg border
+  w-full px-3 py-2.5 text-base md:text-sm rounded-lg border
   bg-[var(--color-bg-tertiary)] border-[var(--color-border)]
   text-[var(--color-text-primary)] placeholder:text-[var(--color-muted)]
   focus:outline-none focus:border-[var(--color-accent)]

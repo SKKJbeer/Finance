@@ -397,8 +397,16 @@ averageCostBasis = totalInvestedCost / totalShares
 
 ## API-Strategie (Security-konform)
 
-### Erlaubte externe Verbindungen:
-- **Alpha Vantage** — anonyme Kursdaten (kein Portfolio, kein User-ID)
+### ⚠️ ABSOLUTE REGEL: Niemals erfundene Kurse
+Kurse müssen IMMER aus einer echten Markt-API kommen. Statische/hartkodierte
+Kurswerte sind strikt verboten — eine Finanz-App darf nie falsche Kurse zeigen.
+Wenn kein Live-Kurs verfügbar ist: Position zum Einstandswert zeigen + klaren
+Hinweis „Kurs nicht verfügbar", aber NIEMALS einen geschätzten Wert.
+
+### Kurs-Quellen (Priorität):
+1. **Yahoo Finance** (`query1/query2.finance.yahoo.com/v8/finance/chart/{symbol}`)
+   — echte Live-Kurse, kein API-Key nötig, Symbole Yahoo-kompatibel (.DE, -USD)
+2. **Alpha Vantage** — Fallback mit User-Key + erweiterte Symbol-Suche
 - **Google Fonts** — Schriftarten (kein JS, nur CSS+Font-Files)
 
 ### Nicht erlaubt:
