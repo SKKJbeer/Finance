@@ -10,6 +10,8 @@ interface PortfolioStore {
   holdings: Holding[]
   isLoading: boolean
   pricesLive: boolean
+  pricesRefreshing: boolean
+  pricesUpdatedAt: string | null
   apiKey: string
   setApiKey: (key: string) => void
   loadTransactions: () => Promise<void>
@@ -23,6 +25,8 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   holdings: [],
   isLoading: false,
   pricesLive: false,
+  pricesRefreshing: false,
+  pricesUpdatedAt: null,
   apiKey: '',
 
   setApiKey: (key) => set({ apiKey: key }),
@@ -53,14 +57,16 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   refreshPrices: async () => {
     const symbols = get().holdings.map(h => h.symbol)
     if (symbols.length === 0) {
-      set({ pricesLive: false })
+      set({ pricesLive: false, pricesRefreshing: false })
       return
     }
 
-    // Primär: echte Live-Kurse von Yahoo (kein Key nötig)
+    set({ pricesRefreshing: true })
+
+    // Primary: Yahoo Finance (no key needed) — tries v7 batch, then v8 per-symbol
     const quotes: Map<string, PriceCache> = await fetchQuotesYahoo(symbols)
 
-    // Fallback für noch fehlende Symbole: Alpha Vantage (falls Key hinterlegt)
+    // Supplement with Alpha Vantage for any symbols Yahoo couldn't serve
     const apiKey = get().apiKey
     if (apiKey) {
       const missing = symbols.filter(s => !quotes.has(s))
@@ -76,9 +82,13 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
         { price: q.price, dayChange: q.dayChange, dayChangePercent: q.dayChangePercent },
       ])
     )
+    const gotFreshPrices = quotes.size > 0
+
     set({
       holdings: enrichHoldingsWithPrices(get().holdings, priceMap),
-      pricesLive: quotes.size > 0,
+      pricesLive: gotFreshPrices,
+      pricesRefreshing: false,
+      pricesUpdatedAt: gotFreshPrices ? new Date().toISOString() : get().pricesUpdatedAt,
     })
   },
 }))

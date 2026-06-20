@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, ArrowUpDown, PieChart } from 'lucide-react'
+import { Plus, ArrowUpDown, PieChart, RefreshCw, AlertCircle, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -16,8 +17,9 @@ export function PortfolioPage() {
   const [showModal, setShowModal] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('currentValue')
   const [sortAsc, setSortAsc] = useState(false)
-  const { holdings, loadTransactions, setApiKey } = usePortfolioStore()
+  const { holdings, loadTransactions, setApiKey, refreshPrices, pricesLive, pricesRefreshing, pricesUpdatedAt } = usePortfolioStore()
   const { settings } = useSettingsStore()
+  const navigate = useNavigate()
 
   useEffect(() => {
     setApiKey(settings.alphaVantageApiKey)
@@ -35,10 +37,17 @@ export function PortfolioPage() {
 
   const metrics = computePortfolioMetrics(holdings)
   const isEmpty = holdings.length === 0
+  const hasHoldings = !isEmpty
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(p => !p)
     else { setSortKey(key); setSortAsc(false) }
+  }
+
+  function formatUpdatedAt(iso: string | null) {
+    if (!iso) return null
+    const d = new Date(iso)
+    return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
   }
 
   const assetTypeLabelMap: Record<string, string> = {
@@ -61,6 +70,56 @@ export function PortfolioPage() {
           Transaktion
         </Button>
       </div>
+
+      {/* Price status banner */}
+      {hasHoldings && !pricesLive && !pricesRefreshing && (
+        <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3">
+          <AlertCircle size={16} className="text-[var(--color-muted)] mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">Live-Kurse nicht verfügbar</p>
+            <p className="text-xs text-[var(--color-muted)] mt-0.5">
+              {settings.alphaVantageApiKey
+                ? 'Kursabruf fehlgeschlagen. Kurse werden beim nächsten Laden erneut versucht.'
+                : 'Hinterlege einen Alpha-Vantage-API-Key für zuverlässige Live-Kurse.'}
+            </p>
+          </div>
+          {!settings.alphaVantageApiKey && (
+            <Button variant="secondary" size="sm" onClick={() => navigate('/einstellungen')}>
+              <Settings size={13} />
+              API-Key
+            </Button>
+          )}
+          <button
+            onClick={() => refreshPrices()}
+            className="p-1.5 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+            title="Kurse aktualisieren"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+      )}
+
+      {hasHoldings && pricesRefreshing && (
+        <div className="flex items-center gap-2 text-xs text-[var(--color-muted)] px-1">
+          <RefreshCw size={12} className="animate-spin" />
+          Kurse werden geladen…
+        </div>
+      )}
+
+      {hasHoldings && pricesLive && pricesUpdatedAt && (
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs text-[var(--color-muted)]">
+            Kurse · aktualisiert {formatUpdatedAt(pricesUpdatedAt)} Uhr
+          </span>
+          <button
+            onClick={() => refreshPrices()}
+            className="p-1 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+            title="Kurse aktualisieren"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
+      )}
 
       {isEmpty ? (
         <Card>
@@ -125,6 +184,7 @@ export function PortfolioPage() {
                     const pnl = h.unrealizedPnL ?? 0
                     const pnlPct = h.unrealizedPnLPercent ?? 0
                     const dayPct = h.dayChangePercent ?? 0
+                    const hasPrice = !!h.currentPrice
                     return (
                       <tr key={h.symbol} className="hover:bg-[var(--color-bg-tertiary)] transition-colors">
                         <td className="px-4 py-3 font-semibold text-[var(--color-text-primary)]">{h.symbol}</td>
@@ -139,19 +199,19 @@ export function PortfolioPage() {
                           {formatCurrency(h.averageCostBasis, h.currency)}
                         </td>
                         <td className="px-4 py-3 text-[var(--color-text-primary)]">
-                          {h.currentPrice ? formatCurrency(h.currentPrice, h.currency) : '—'}
+                          {hasPrice ? formatCurrency(h.currentPrice!, h.currency) : <span className="text-[var(--color-muted)]">—</span>}
                         </td>
                         <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">
-                          {h.currentValue ? formatCurrency(h.currentValue, settings.currency) : '—'}
+                          {h.currentValue ? formatCurrency(h.currentValue, settings.currency) : <span className="text-[var(--color-muted)]">—</span>}
                         </td>
-                        <td className={`px-4 py-3 font-medium ${pnl >= 0 ? 'text-gain' : 'text-loss'}`}>
-                          {pnl >= 0 ? '+' : ''}{formatCurrency(pnl, settings.currency)}
+                        <td className={`px-4 py-3 font-medium ${hasPrice ? (pnl >= 0 ? 'text-gain' : 'text-loss') : 'text-[var(--color-muted)]'}`}>
+                          {hasPrice ? `${pnl >= 0 ? '+' : ''}${formatCurrency(pnl, settings.currency)}` : '—'}
                         </td>
-                        <td className={`px-4 py-3 ${pnlPct >= 0 ? 'text-gain' : 'text-loss'}`}>
-                          {formatPercent(pnlPct)}
+                        <td className={`px-4 py-3 ${hasPrice ? (pnlPct >= 0 ? 'text-gain' : 'text-loss') : 'text-[var(--color-muted)]'}`}>
+                          {hasPrice ? formatPercent(pnlPct) : '—'}
                         </td>
-                        <td className={`px-4 py-3 ${dayPct >= 0 ? 'text-gain' : 'text-loss'}`}>
-                          {dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}%
+                        <td className={`px-4 py-3 ${hasPrice ? (dayPct >= 0 ? 'text-gain' : 'text-loss') : 'text-[var(--color-muted)]'}`}>
+                          {hasPrice ? `${dayPct >= 0 ? '+' : ''}${dayPct.toFixed(2)}%` : '—'}
                         </td>
                       </tr>
                     )
