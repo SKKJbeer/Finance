@@ -17,14 +17,15 @@ export function PortfolioPage() {
   const [showModal, setShowModal] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('currentValue')
   const [sortAsc, setSortAsc] = useState(false)
-  const { holdings, loadTransactions, setApiKey, refreshPrices, pricesLive, pricesRefreshing, pricesUpdatedAt } = usePortfolioStore()
+  const { holdings, loadTransactions, setApiKey, setFmpApiKey, refreshPrices, pricesLive, pricesRefreshing, pricesUpdatedAt } = usePortfolioStore()
   const { settings } = useSettingsStore()
   const navigate = useNavigate()
 
   useEffect(() => {
     setApiKey(settings.alphaVantageApiKey)
+    setFmpApiKey(settings.fmpApiKey)
     loadTransactions()
-  }, [loadTransactions, setApiKey, settings.alphaVantageApiKey])
+  }, [loadTransactions, setApiKey, setFmpApiKey, settings.alphaVantageApiKey, settings.fmpApiKey])
 
   const sorted = [...holdings].sort((a, b) => {
     const av = (a[sortKey] ?? 0) as number | string

@@ -60,30 +60,63 @@ export function SettingsPage() {
         </Card>
 
         <Card>
-          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1">Kursdaten (optional)</h2>
-          <p className="text-xs text-[var(--color-muted)] mb-4">
-            Live-Kurse werden automatisch von Yahoo Finance geladen — kein Key nötig.
-            Ein kostenloser Alpha-Vantage-Key dient nur als Fallback und für die erweiterte Wertpapier-Suche.
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1">Kursdaten</h2>
+          <p className="text-xs text-[var(--color-muted)] mb-5">
+            Krypto-Kurse kommen automatisch und kostenlos von <strong className="text-[var(--color-text-secondary)]">CoinGecko</strong> — kein Key nötig.
+            Für Aktien &amp; ETFs empfehlen wir einen kostenlosen FMP-Key.
           </p>
-          <div>
-            <label className={labelClass}>API-Key</label>
+
+          {/* FMP — primäre Kursquelle für Aktien/ETFs */}
+          <div className="rounded-lg border border-[var(--color-accent)] border-opacity-30 bg-[var(--color-bg-tertiary)] p-3 mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold text-[var(--color-text-primary)]">Financial Modeling Prep</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white">Empfohlen</span>
+            </div>
+            <p className="text-xs text-[var(--color-muted)] mb-2">
+              Beste Abdeckung für DAX-Aktien, ETFs &amp; US-Aktien. Kostenlos, kein Abo, keine Kreditkarte.
+              250 Abfragen/Tag im Free-Tier (reicht für 20+ Positionen).
+            </p>
             <input
-              {...register('alphaVantageApiKey')}
+              {...register('fmpApiKey')}
               type="password"
-              placeholder="Dein Alpha Vantage API-Key"
+              placeholder="FMP API-Key einfügen"
               className={inputClass}
               autoComplete="off"
             />
+            <a
+              href="https://financialmodelingprep.com/developer/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-2 text-xs text-[var(--color-accent)] hover:underline"
+            >
+              Kostenlosen FMP-Key erstellen
+              <ExternalLink size={11} />
+            </a>
           </div>
-          <a
-            href="https://www.alphavantage.co/support/#api-key"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 mt-3 text-xs text-[var(--color-accent)] hover:underline"
-          >
-            Kostenlosen API-Key holen
-            <ExternalLink size={11} />
-          </a>
+
+          {/* Alpha Vantage — Legacy-Fallback */}
+          <div>
+            <label className={labelClass}>
+              Alpha Vantage API-Key{' '}
+              <span className="text-[var(--color-muted)] font-normal">(Fallback · 25 Abfragen/Tag)</span>
+            </label>
+            <input
+              {...register('alphaVantageApiKey')}
+              type="password"
+              placeholder="Alpha Vantage API-Key"
+              className={inputClass}
+              autoComplete="off"
+            />
+            <a
+              href="https://www.alphavantage.co/support/#api-key"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text-secondary)] hover:underline"
+            >
+              Alpha-Vantage-Key holen
+              <ExternalLink size={11} />
+            </a>
+          </div>
         </Card>
 
         <Card>
@@ -142,7 +175,7 @@ export function SettingsPage() {
 const labelClass = 'text-xs font-medium text-[var(--color-text-secondary)] mb-1 block'
 const inputClass = `
   w-full px-3 py-2 text-sm rounded-lg border
-  bg-[var(--color-bg-tertiary)] border-[var(--color-border)]
+  bg-[var(--color-bg-secondary)] border-[var(--color-border)]
   text-[var(--color-text-primary)] placeholder:text-[var(--color-muted)]
   focus:outline-none focus:border-[var(--color-accent)]
   transition-colors

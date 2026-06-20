@@ -9,6 +9,7 @@ interface SettingsStore {
 
 const defaults: AppSettings = {
   currency: 'EUR',
+  fmpApiKey: '',
   alphaVantageApiKey: '',
   sparerpauschbetrag: 1000,
   taxFiling: 'single',

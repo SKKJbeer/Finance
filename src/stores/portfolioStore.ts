@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import { db } from '@/lib/db'
 import { computeHoldings, enrichHoldingsWithPrices } from '@/lib/calculations/portfolio'
-import { fetchQuotesYahoo, fetchMultipleQuotes } from '@/lib/api/marketData'
+import {
+  fetchCoinGeckoCrypto,
+  fetchQuotesFMP,
+  fetchQuotesYahoo,
+  fetchMultipleQuotes,
+} from '@/lib/api/marketData'
 import type { Transaction, Holding, PriceCache } from '@/types'
 import { nanoid } from '@/lib/nanoid'
 
@@ -12,8 +17,10 @@ interface PortfolioStore {
   pricesLive: boolean
   pricesRefreshing: boolean
   pricesUpdatedAt: string | null
-  apiKey: string
+  apiKey: string         // Alpha Vantage (legacy fallback)
+  fmpApiKey: string      // Financial Modeling Prep (primary for stocks/ETFs)
   setApiKey: (key: string) => void
+  setFmpApiKey: (key: string) => void
   loadTransactions: () => Promise<void>
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void>
   deleteTransaction: (id: string) => Promise<void>
@@ -28,8 +35,10 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   pricesRefreshing: false,
   pricesUpdatedAt: null,
   apiKey: '',
+  fmpApiKey: '',
 
   setApiKey: (key) => set({ apiKey: key }),
+  setFmpApiKey: (key) => set({ fmpApiKey: key }),
 
   loadTransactions: async () => {
     set({ isLoading: true })
@@ -40,11 +49,7 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   },
 
   addTransaction: async (txData) => {
-    const tx: Transaction = {
-      ...txData,
-      id: nanoid(),
-      createdAt: new Date().toISOString(),
-    }
+    const tx: Transaction = { ...txData, id: nanoid(), createdAt: new Date().toISOString() }
     await db.transactions.add(tx)
     await get().loadTransactions()
   },
@@ -55,24 +60,46 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
   },
 
   refreshPrices: async () => {
-    const symbols = get().holdings.map(h => h.symbol)
-    if (symbols.length === 0) {
+    const holdings = get().holdings
+    if (holdings.length === 0) {
       set({ pricesLive: false, pricesRefreshing: false })
       return
     }
 
     set({ pricesRefreshing: true })
+    const quotes = new Map<string, PriceCache>()
 
-    // Primary: Yahoo Finance (no key needed) — tries v7 batch, then v8 per-symbol
-    const quotes: Map<string, PriceCache> = await fetchQuotesYahoo(symbols)
+    // Split holdings by asset type
+    const cryptoSymbols = holdings.filter(h => h.assetType === 'crypto').map(h => h.symbol)
+    const stockSymbols = holdings.filter(h => h.assetType !== 'crypto').map(h => h.symbol)
 
-    // Supplement with Alpha Vantage for any symbols Yahoo couldn't serve
-    const apiKey = get().apiKey
-    if (apiKey) {
-      const missing = symbols.filter(s => !quotes.has(s))
-      if (missing.length > 0) {
-        const av = await fetchMultipleQuotes(missing, apiKey)
-        for (const [sym, q] of av.entries()) quotes.set(sym, q)
+    // ── 1. CoinGecko für Krypto (immer, kein Key nötig) ──────────────────
+    if (cryptoSymbols.length > 0) {
+      const cryptoQuotes = await fetchCoinGeckoCrypto(cryptoSymbols)
+      for (const [sym, q] of cryptoQuotes.entries()) quotes.set(sym, q)
+    }
+
+    // ── 2. FMP für Aktien/ETFs (wenn Key hinterlegt) ──────────────────────
+    const fmpKey = get().fmpApiKey
+    if (fmpKey && stockSymbols.length > 0) {
+      const fmpQuotes = await fetchQuotesFMP(stockSymbols, fmpKey)
+      for (const [sym, q] of fmpQuotes.entries()) quotes.set(sym, q)
+    }
+
+    // ── 3. Yahoo Finance für Symbole die FMP nicht geliefert hat ──────────
+    const afterFmp = stockSymbols.filter(s => !quotes.has(s))
+    if (afterFmp.length > 0) {
+      const yahooQuotes = await fetchQuotesYahoo(afterFmp)
+      for (const [sym, q] of yahooQuotes.entries()) quotes.set(sym, q)
+    }
+
+    // ── 4. Alpha Vantage als letzter Fallback ─────────────────────────────
+    const avKey = get().apiKey
+    if (avKey) {
+      const stillMissing = holdings.map(h => h.symbol).filter(s => !quotes.has(s))
+      if (stillMissing.length > 0) {
+        const avQuotes = await fetchMultipleQuotes(stillMissing, avKey)
+        for (const [sym, q] of avQuotes.entries()) quotes.set(sym, q)
       }
     }
 
@@ -82,13 +109,13 @@ export const usePortfolioStore = create<PortfolioStore>()((set, get) => ({
         { price: q.price, dayChange: q.dayChange, dayChangePercent: q.dayChangePercent },
       ])
     )
-    const gotFreshPrices = quotes.size > 0
+    const gotPrices = quotes.size > 0
 
     set({
       holdings: enrichHoldingsWithPrices(get().holdings, priceMap),
-      pricesLive: gotFreshPrices,
+      pricesLive: gotPrices,
       pricesRefreshing: false,
-      pricesUpdatedAt: gotFreshPrices ? new Date().toISOString() : get().pricesUpdatedAt,
+      pricesUpdatedAt: gotPrices ? new Date().toISOString() : get().pricesUpdatedAt,
     })
   },
 }))

@@ -129,6 +129,7 @@ export interface TaxSummary {
 
 export interface AppSettings {
   currency: Currency
+  fmpApiKey: string
   alphaVantageApiKey: string
   sparerpauschbetrag: number
   taxFiling: 'single' | 'married'
